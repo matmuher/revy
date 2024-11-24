@@ -1,5 +1,9 @@
 #pragma once
 
+#include <variant> // operand
+#include <functional> // execute
+#include <array>
+
 /*
     Control execution of bytecode
     Allocate method memory
@@ -40,14 +44,16 @@ class Executor {
 
     Frame AllocateLocals(int localsSize);
     void FreeLocals(Frame oldFrame);
-    void Execute(int methodIdx);
 
 public:
+
+    Local ret;
 
     Local& operator[] (int localIdx);
 
     void Execute();
 
+    Local Execute(int methodIdx, int rangeStart, int rangeEnd);
     Executor(Method* methods, int methodsNumber);
 };
 
@@ -60,21 +66,20 @@ public:
         + number of used local variables
 */
 struct Method {
-    Instruction** instructions;
+    Instruction* instructions;
     int instructionsNumber;
 
     int localNumber;
 
-    Method(Instruction** instructions, int instructionsNumber);
+    Method(Instruction* instructions, int instructionsNumber);
     Method() {};
 };
 
-/*
-    Contains info about instruction execution
-*/
-class Instruction {
-public:
-    virtual void Execute(Executor& executor) = 0;
+struct Operand4 {
+    int rd;
+    int methodIdx;
+    int rangeStart;
+    int rangeEnd;
 };
 
 struct Operand3 {
@@ -83,12 +88,31 @@ struct Operand3 {
     int rhs;
 };
 
-struct Mul : public Instruction, public Operand3 {
-    void Execute(Executor& executor) override;
+struct Operand2 {
+    int rd;
+    int rs;
 };
 
-struct Cmpg : public Instruction, public Operand3 {
-    void Execute(Executor& executor) override;
+struct Operand1 {
+    int r;
 };
 
+using Operand = std::variant<Operand4, Operand3, Operand2, Operand1>;
 
+/*
+    Contains info about instruction execution
+*/
+struct Instruction {
+
+    enum class Opcode {
+        Mul = 0,
+        Cmpg,
+        Call,
+        Ret,
+        Mov,
+        Number
+    };
+
+    Opcode opcode;
+    Operand operand;
+};

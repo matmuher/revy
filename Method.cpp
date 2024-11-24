@@ -7,7 +7,7 @@ Local Executor::BadLocal = {};
 void Executor::Execute() {
     // check methods_ is not empty
 
-    Execute(StartMethodIdx);
+    Execute(StartMethodIdx, 0, 0);
 }
 
 Frame Executor::AllocateLocals(int localsSize) {
@@ -22,17 +22,25 @@ void Executor::FreeLocals(Frame oldFrame) {
     currentFrame_ = oldFrame;
 }
 
-void Executor::Execute(int methodIdx) {
+
+using OpcodeFunc = std::function<void(Executor&, Operand)>;
+OpcodeFunc GetOpcodeFunc(Instruction::Opcode opcode);
+
+Local Executor::Execute(int methodIdx, int rangeStart, int rangeEnd) {
     // check methodIdx is in bounds
     
     Method& method = methods_[methodIdx];
     Frame oldFrame = AllocateLocals(method.localNumber);
 
     for (int idx = 0; idx < method.instructionsNumber; ++idx) {
-        method.instructions[idx]->Execute(*this);
+        auto opcodeFunc = GetOpcodeFunc(method.instructions[idx].opcode);
+        auto operand = method.instructions[idx].operand;
+        opcodeFunc(*this, operand);
     }
 
     FreeLocals(oldFrame);
+
+    return ret;
 }
 
 Executor::Executor(Method* methods, int methodsNumber) {
@@ -57,8 +65,8 @@ Local& Executor::operator[] (int localIdx) {
     return locals_[globalIdx];
 }
 
-Method::Method(Instruction** instructions, int instructionsNumber) {
-    this->instructions = new Instruction*[instructionsNumber];
+Method::Method(Instruction* instructions, int instructionsNumber) {
+    this->instructions = new Instruction[instructionsNumber];
     
     std::memcpy(this->instructions,
                 instructions,
@@ -67,12 +75,48 @@ Method::Method(Instruction** instructions, int instructionsNumber) {
     this->instructionsNumber = instructionsNumber;
 }
 
-void Mul::Execute(Executor& executor) {
-    std::cerr << __PRETTY_FUNCTION__ << '\n'; 
-    executor[rd] = executor[lhs] * executor[rhs];
-}
+OpcodeFunc GetOpcodeFunc(Instruction::Opcode opcode) {
+    
+    switch(opcode) {
+        case Instruction::Opcode::Mul:
+            return [](Executor& executor, Operand operand) {
+                        Operand3 ops = std::get<Operand3>(operand);
+                        executor[ops.rd] = executor[ops.lhs] * executor[ops.rhs];
+                        std::cerr << "Mul: " << ops.rd << ops.lhs << ops.rhs << '\n';
+                    };
 
-void Cmpg::Execute(Executor& executor) {
-    std::cerr << __PRETTY_FUNCTION__ << '\n';
-    executor[rd] = executor[lhs] > executor[rhs];
+        case Instruction::Opcode::Cmpg:
+            return [](Executor& executor, Operand operand) {
+                        Operand3 ops = std::get<Operand3>(operand);
+                        executor[ops.rd] = executor[ops.lhs] > executor[ops.rhs];
+                        std::cerr << "Cmpg: " << ops.rd << ops.lhs << ops.rhs << '\n';
+                    };
+
+        case Instruction::Opcode::Mov:
+            return [](Executor& executor, Operand operand) {
+                        Operand2 ops = std::get<Operand2>(operand);
+                        executor[ops.rd] = executor[ops.rs];
+                        std::cerr << "Mov: " << ops.rd << ops.rs << '\n';
+                    };
+
+        case Instruction::Opcode::Call:
+            return [](Executor& executor, Operand operand) {
+                        Operand4 ops = std::get<Operand4>(operand);
+                        Local ret = executor.Execute(ops.methodIdx, ops.rangeStart, ops.rangeEnd);
+                        executor[ops.rd] = ret;
+                        std::cerr << "Call: " << ops.rd << ops.rangeStart << ops.rangeEnd << '\n';
+                    };
+
+        case Instruction::Opcode::Ret:
+            return [](Executor& executor, Operand operand) {
+                        Operand1 ops = std::get<Operand1>(operand);
+                        executor.ret = executor[ops.r];
+                        std::cerr << "Ret: " << ops.r << '\n';
+                    };
+        default:
+            std::cerr << "Unkown opcode: " << (int) opcode << '\n';
+            return [](Executor& executor, Operand operand) {
+                        ; // set some error flag mb
+                    };
+    }
 }

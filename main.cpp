@@ -7,12 +7,12 @@ int main() {
     Execute them
 */
 
-    Instruction* mainInstrs[] = {
-        new Mul(),
-        new Cmpg()
+    Instruction mainInstrs[] = {
+        Instruction{Instruction::Opcode::Mul, Operand3{0, 1, 0}},
+        Instruction{Instruction::Opcode::Cmpg, Operand3{0, 0, 1}},
     };
 
-    Method main{(Instruction**) mainInstrs, std::size(mainInstrs)};
+    Method main{(Instruction*) mainInstrs, std::size(mainInstrs)};
 
     Method methods[] = {main};
     Executor executor{methods, std::size(methods)};
