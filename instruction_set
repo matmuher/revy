@@ -1,0 +1,15 @@
+add: rd = lhs + rhs
+sub: rd = lhs - rhs
+mul: rd = lhs * rhs
+div: rd = lhs / rhs
+
+cmpg: rd = lhs > rhs
+cmpge: rd = lhs >= rhs
+cmpe: rd = lhs == rhs
+
+jmpt rd shift
+jmpf rd shif
+
+call(method_idx, range_st, range_end)
+
+return ret
