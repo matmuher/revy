@@ -32,7 +32,7 @@ class Instruction;
 class Executor {
     static Local BadLocal;
     static int constexpr StartMethodIdx = 0;
-    static int constexpr LocalsSize = 10;
+    static int constexpr LocalsSize = 100;
 
     Local* locals_;
     Frame currentFrame_;
@@ -40,7 +40,6 @@ class Executor {
     Method* methods_;
     int methodsNumber_;
     int currentMethod_;
-    int currentInstruction_;
 
     Frame AllocateLocals(int localsSize);
     void FreeLocals(Frame oldFrame);
@@ -48,6 +47,7 @@ class Executor {
 public:
 
     Local ret;
+    int currentInstruction;
 
     Local& operator[] (int localIdx);
 
@@ -71,7 +71,7 @@ struct Method {
 
     int localNumber;
 
-    Method(Instruction* instructions, int instructionsNumber);
+    Method(Instruction* instructions, int instructionsNumber, int localNumber);
     Method() {};
 };
 
@@ -90,7 +90,7 @@ struct Operand3 {
 
 struct Operand2 {
     int rd;
-    int rs;
+    int val;
 };
 
 struct Operand1 {
@@ -107,9 +107,12 @@ struct Instruction {
     enum class Opcode {
         Mul = 0,
         Cmpg,
+        Cmpge,
         Call,
         Ret,
         Mov,
+        Add,
+        Jmpt,
         Number
     };
 
