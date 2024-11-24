@@ -51,7 +51,7 @@ public:
 
     Local& operator[] (int localIdx);
 
-    void Execute();
+    void Execute(int N = 5);
 
     Local Execute(int methodIdx, int rangeStart, int rangeEnd);
     Executor(Method* methods, int methodsNumber);
@@ -112,7 +112,9 @@ struct Instruction {
         Ret,
         Mov,
         Add,
+        Sub,
         Jmpt,
+        Jmp,
         Number
     };
 
