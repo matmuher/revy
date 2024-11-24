@@ -9,9 +9,6 @@ int main() {
     using enum Instruction::Opcode;
 
     Instruction mainInstrs[] = {
-        // {Mov, Operand2{ .rd = 0,
-        //                 .val = 7}},
-
         {Call, Operand4{.rd = 0,
                         .methodIdx = (int) Methods::fib,
                         .rangeStart = 0,
@@ -25,6 +22,7 @@ int main() {
     methods[(int) Methods::main] = start;
     methods[(int) Methods::fib] = getLoopFib();
     Executor executor{methods, std::size(methods)};
+
     executor.Execute(6);
     std::cerr << "Loop fibbonachi(6) = " << executor.ret << '\n';
 
