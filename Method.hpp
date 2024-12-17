@@ -23,6 +23,13 @@
 struct Frame {
     int start{};
     int size{};
+
+    int currentMethod;
+    int currentInstruction;
+
+    int returnIdx;
+
+    Frame* previousFrame;
 };
 
 class Method;
@@ -32,17 +39,17 @@ class Instruction;
 class Executor {
     static Local BadLocal;
     static int constexpr StartMethodIdx = 0;
-    static int constexpr LocalsSize = 100;
+    static int constexpr LocalsSize = 300;
 
     Local* locals_;
-    Frame currentFrame_;
+    Frame* currentFrame_;
 
     Method* methods_;
     int methodsNumber_;
     int currentMethod_;
 
-    Frame AllocateLocals(int localsSize);
-    void FreeLocals(Frame oldFrame);
+    void AllocateLocals(int localsSize, int method, int retIdx);
+    void FreeLocals();
 
 public:
 
@@ -51,9 +58,8 @@ public:
 
     Local& operator[] (int localIdx);
 
-    void Execute(int N = 5);
+    void Aller(int N = 5);
 
-    Local Execute(int methodIdx, int rangeStart, int rangeEnd);
     Executor(Method* methods, int methodsNumber);
 };
 
