@@ -7,69 +7,165 @@
 
 Local Executor::BadLocal = {};
 
-void Executor::Execute(int N) {
-    // check methods_ is not empty
+void Executor::Aller(int N) {
+
+    currentFrame_ = new Frame{.start = 0, .size = 1};
+    AllocateLocals(methods_[StartMethodIdx].localNumber, StartMethodIdx, 0); // allocate frame for main
+
+    Executor& executor = *this;
     this->operator[](0) = N;
-    Execute(StartMethodIdx, 0, 1);
+
+    while(true) {
+        LOG("Current method: " << currentFrame_->currentMethod);
+        LOG("Current instru: " << currentFrame_->currentInstruction);
+        Method& method = methods_[currentFrame_->currentMethod];
+     
+        currentFrame_->currentInstruction += 1;
+        int currentInstruction = currentFrame_->currentInstruction;
+
+        // FUCK: Replace with fetch & decode
+        Instruction instruction = method.instructions[currentInstruction];
+        Instruction::Opcode opcode = instruction.opcode; 
+        Operand operand = instruction.operand;
+
+        switch(opcode) {
+            case Instruction::Opcode::Mul:
+                {
+                    Operand3 ops = std::get<Operand3>(operand);
+                    LOG("Mul: " << ops.rd << ops.lhs << ops.rhs);
+                    executor[ops.rd] = executor[ops.lhs] * executor[ops.rhs];
+                    break;
+                };
+
+            case Instruction::Opcode::Add:
+                {
+                    Operand3 ops = std::get<Operand3>(operand);
+                    LOG("Add: " << ops.rd << ops.lhs << ops.rhs);
+                    executor[ops.rd] = executor[ops.lhs] + executor[ops.rhs];
+                    break;
+                };
+
+            case Instruction::Opcode::Sub:
+                {
+                    Operand3 ops = std::get<Operand3>(operand);
+                    LOG("Sub: " << ops.rd << ops.lhs << ops.rhs);
+                    executor[ops.rd] = executor[ops.lhs] - executor[ops.rhs];
+                    break;
+                };
+
+            case Instruction::Opcode::Cmpg:
+                {
+                    Operand3 ops = std::get<Operand3>(operand);
+                    LOG("Cmpg: " << ops.rd << ops.lhs << ops.rhs);
+                    executor[ops.rd] = executor[ops.lhs] > executor[ops.rhs];
+                    break;
+                };
+
+            case Instruction::Opcode::Cmpge:
+                {
+                    Operand3 ops = std::get<Operand3>(operand);
+                    LOG("Cmpge: " << ops.rd << ops.lhs << ops.rhs);
+                    executor[ops.rd] = (executor[ops.lhs] >= executor[ops.rhs]);
+                    LOG(executor[ops.lhs] << ' ' << executor[ops.rhs]);
+                    LOG("Result: " << executor[ops.rd]);
+                    break;
+                };
+
+            case Instruction::Opcode::Mov:
+                {
+                    Operand2 ops = std::get<Operand2>(operand);
+                    LOG("Mov: " << ops.rd << ops.val);
+                    executor[ops.rd] = ops.val;
+                    LOG(executor[ops.rd]);
+                    break;
+                };
+
+            case Instruction::Opcode::Jmpt:
+                {
+                    Operand2 ops = std::get<Operand2>(operand);
+                    LOG("Jmpt: " << ops.rd << ops.val);
+                    if (executor[ops.rd] != 0) {
+                        currentFrame_->currentInstruction += ops.val;
+                    }
+                    break;
+                };
+
+            case Instruction::Opcode::Jmp:
+                {
+                    Operand1 ops = std::get<Operand1>(operand);
+                    LOG("Jmp: " << ops.r);
+                    currentFrame_->currentInstruction += ops.r;
+                    break;
+                };
+
+            case Instruction::Opcode::Call:
+                {
+                    Operand4 ops = std::get<Operand4>(operand);
+                    LOG("Call: " << ops.rd << ops.methodIdx << ops.rangeStart << ops.rangeEnd);
+                    
+                    // copy range of args
+                    for (int argIdx = ops.rangeStart; argIdx < ops.rangeEnd; argIdx++) {
+                        executor[currentFrame_->size + (argIdx - ops.rangeStart)] = executor[argIdx];
+                        LOG("Copy arg: " << argIdx << ' ' << (this->operator[](argIdx)));
+                    }
+
+                    AllocateLocals( methods_[ops.methodIdx].localNumber,
+                                    ops.methodIdx,
+                                    ops.rd); // allocate new frame
+
+                    LOG("locals[0]: " << this->operator[](0));
+                    break;
+                };
+
+            case Instruction::Opcode::Ret:
+                {
+                    Operand1 ops = std::get<Operand1>(operand);
+                    LOG("Ret: " << ops.r);
+                    executor.ret = executor[ops.r]; // save ret value
+                    LOG("Val: " << executor.ret);
+                    FreeLocals(); // restore frame
+
+                    int returnIdx = currentFrame_->returnIdx;
+                    executor[returnIdx] = executor.ret; // put ret value
+
+                    if (currentFrame_->previousFrame == nullptr) {
+                        LOG("End of execution");
+                        return;
+                    }
+
+                    break;
+                };
+
+            default:
+                std::cerr << "Unkown opcode: " << (int) opcode << '\n';
+                {
+                    ; // set some error flag mb
+                };
+        }
+    }
 }
 
-Frame Executor::AllocateLocals(int localsSize) {
-    Frame oldFrame = currentFrame_;
-    int newLocalsStart = oldFrame.start + oldFrame.size;
-    currentFrame_ = Frame{newLocalsStart, localsSize};
+void Executor::AllocateLocals(int localsSize, int method, int retIdx) {
+    Frame* oldFrame = currentFrame_;
+    oldFrame->returnIdx = retIdx; // where to put ret value
 
-    return oldFrame;
+    int newLocalsStart = oldFrame->start + oldFrame->size;
+    currentFrame_ = new Frame{  .start = newLocalsStart,
+                                .size = localsSize,
+                                .currentMethod = method,
+                                .currentInstruction = -1,
+                                .returnIdx = 0,
+                                .previousFrame = oldFrame};
 }
 
-void Executor::FreeLocals(Frame oldFrame) {
-    currentFrame_ = oldFrame;
+void Executor::FreeLocals() {
+    Frame* deadFrame = currentFrame_;
+    currentFrame_ = currentFrame_->previousFrame;
+    delete deadFrame;
 }
-
 
 using OpcodeFunc = std::function<void(Executor&, Operand)>;
 OpcodeFunc GetOpcodeFunc(Instruction::Opcode opcode);
-
-Local Executor::Execute(int methodIdx, int rangeStart, int rangeEnd) {
-    // check methodIdx is in bounds
-    
-    Method& method = methods_[methodIdx];
-
-    // check that range is not wider than method parameters number
-    for (int argIdx = rangeStart; argIdx < rangeEnd; argIdx++) {
-        this->operator[](currentFrame_.size + (argIdx - rangeStart)) = this->operator[](argIdx);
-
-        LOG("Copy arg: " << argIdx << ' ' << (this->operator[](argIdx)));
-    }
-
-    Frame oldFrame = AllocateLocals(method.localNumber);
-
-    LOG("locals[0]: " << this->operator[](0));
-
-    int oldCurrentInstruction = currentInstruction;
-
-    currentInstruction = 0;
-
-    while(true) {
-        // check for infinity loop
-
-        Instruction instruction = method.instructions[currentInstruction];
-
-        auto opcodeFunc = GetOpcodeFunc(method.instructions[currentInstruction].opcode);
-        auto operand = method.instructions[currentInstruction].operand;
-        opcodeFunc(*this, operand);
-
-        if (instruction.opcode == Instruction::Opcode::Ret) {
-            break;
-        }
-
-        currentInstruction++;
-    }
-
-    currentInstruction = oldCurrentInstruction;
-    FreeLocals(oldFrame);
-    
-    return ret;
-}
 
 Executor::Executor(Method* methods, int methodsNumber) {
     methods_ = new Method[methodsNumber];
@@ -84,7 +180,7 @@ Executor::Executor(Method* methods, int methodsNumber) {
 }
 
 Local& Executor::operator[] (int localIdx) {
-    int globalIdx = currentFrame_.start + localIdx;
+    int globalIdx = currentFrame_->start + localIdx;
     // std::cerr << localIdx << " " << globalIdx << '\n';
 
     if (globalIdx > LocalsSize) {
@@ -107,90 +203,4 @@ Method::Method( Instruction* instructions,
 
     this->instructionsNumber = instructionsNumber;
     this->localNumber = localNumber;
-}
-
-OpcodeFunc GetOpcodeFunc(Instruction::Opcode opcode) {
-    
-    switch(opcode) {
-        case Instruction::Opcode::Mul:
-            return [](Executor& executor, Operand operand) {
-                        Operand3 ops = std::get<Operand3>(operand);
-                        executor[ops.rd] = executor[ops.lhs] * executor[ops.rhs];
-                        LOG("Mul: " << ops.rd << ops.lhs << ops.rhs);
-                    };
-
-        case Instruction::Opcode::Add:
-            return [](Executor& executor, Operand operand) {
-                        Operand3 ops = std::get<Operand3>(operand);
-                        executor[ops.rd] = executor[ops.lhs] + executor[ops.rhs];
-                        LOG("Add: " << ops.rd << ops.lhs << ops.rhs);
-                    };
-
-        case Instruction::Opcode::Sub:
-            return [](Executor& executor, Operand operand) {
-                        Operand3 ops = std::get<Operand3>(operand);
-                        executor[ops.rd] = executor[ops.lhs] - executor[ops.rhs];
-                        LOG("Sub: " << ops.rd << ops.lhs << ops.rhs);
-                    };
-
-        case Instruction::Opcode::Cmpg:
-            return [](Executor& executor, Operand operand) {
-                        Operand3 ops = std::get<Operand3>(operand);
-                        executor[ops.rd] = executor[ops.lhs] > executor[ops.rhs];
-                        LOG("Cmpg: " << ops.rd << ops.lhs << ops.rhs);
-                    };
-
-        case Instruction::Opcode::Cmpge:
-            return [](Executor& executor, Operand operand) {
-                        Operand3 ops = std::get<Operand3>(operand);
-                        executor[ops.rd] = (executor[ops.lhs] >= executor[ops.rhs]);
-                        LOG(executor[ops.lhs] << ' ' << executor[ops.rhs]);
-                        LOG("Cmpge: " << ops.rd << ops.lhs << ops.rhs);
-                        LOG("Result: " << executor[ops.rd]); 
-                    };
-
-        case Instruction::Opcode::Mov:
-            return [](Executor& executor, Operand operand) {
-                        Operand2 ops = std::get<Operand2>(operand);
-                        executor[ops.rd] = ops.val;
-                        LOG(executor[ops.rd]);
-                        LOG("Mov: " << ops.rd << ops.val);
-                    };
-
-        case Instruction::Opcode::Jmpt:
-            return [](Executor& executor, Operand operand) {
-                        Operand2 ops = std::get<Operand2>(operand);
-                        if (executor[ops.rd] != 0) {
-                            executor.currentInstruction += ops.val;
-                        }
-                        LOG("Jmpt: " << ops.rd << ops.val);
-                    };
-
-        case Instruction::Opcode::Jmp:
-            return [](Executor& executor, Operand operand) {
-                        Operand1 ops = std::get<Operand1>(operand);
-                        executor.currentInstruction += ops.r;
-                        LOG("Jmp: " << ops.r);
-                    };
-
-        case Instruction::Opcode::Call:
-            return [](Executor& executor, Operand operand) {
-                        Operand4 ops = std::get<Operand4>(operand);
-                        LOG("Call: " << ops.rd << ops.methodIdx << ops.rangeStart << ops.rangeEnd);
-                        Local ret = executor.Execute(ops.methodIdx, ops.rangeStart, ops.rangeEnd);
-                        executor[ops.rd] = ret;
-                    };
-
-        case Instruction::Opcode::Ret:
-            return [](Executor& executor, Operand operand) {
-                        Operand1 ops = std::get<Operand1>(operand);
-                        executor.ret = executor[ops.r];
-                        LOG("Ret: " << ops.r << ", val = " << executor[ops.r]);
-                    };
-        default:
-            std::cerr << "Unkown opcode: " << (int) opcode << '\n';
-            return [](Executor& executor, Operand operand) {
-                        ; // set some error flag mb
-                    };
-    }
 }

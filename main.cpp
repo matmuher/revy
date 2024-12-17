@@ -23,10 +23,10 @@ int main() {
     methods[(int) Methods::fib] = getLoopFib();
     Executor executor{methods, std::size(methods)};
 
-    executor.Execute(6);
+    executor.Aller(6);
     std::cerr << "Loop fibbonachi(6) = " << executor.ret << '\n';
 
     methods[(int) Methods::fib] = getRecursiveFib();
-    executor.Execute(7);
+    executor.Aller(7);
     std::cerr << "Recursive fibbonachi(7) = " << executor.ret << '\n';
 }
